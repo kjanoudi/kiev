@@ -117,14 +117,27 @@ module Kiev
           data[:body] = full_body.join
         end
 
+        if data[:body].present? && response_gzipped?(response)
+          begin
+            sio = StringIO.new(data[:body])
+            gz = Zlib::GzipReader.new(sio)
+            data[:body] = gz.read
+          rescue Zlib::GzipFile::Error => err
+            data[:gzip_error] = err.message
+          end
+        end
+
         should_log_errors = config.log_request_error_condition.call(request, response)
         if should_log_errors && exception.is_a?(Exception)
           data[:error_class] = exception.class.name
           data[:error_message] = exception.message[0..5000]
           data[:error_backtrace] = Array(exception.backtrace).join(NEW_LINE)[0..5000]
         end
-
         data
+      end
+
+      def response_gzipped?(response)
+        response && response.headers && response.headers.is_a?(Hash) && response.headers["Content-Encoding"] == 'gzip'
       end
 
       def extract_route(env)
